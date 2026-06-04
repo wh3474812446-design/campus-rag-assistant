@@ -4,3 +4,12 @@ gatherUsageStats = false
 [server]
 # 启动时自动在浏览器打开
 headless = false
+
+[theme]
+# 暖米白 + 近黑 + 暖橙 复古极简色板
+base = "light"
+primaryColor = "#C0532E"
+backgroundColor = "#EDE9DD"
+secondaryBackgroundColor = "#F5F2E9"
+textColor = "#1C1B19"
+font = "serif"
