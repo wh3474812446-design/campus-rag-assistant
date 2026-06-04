@@ -19,4 +19,12 @@ if errorlevel 1 goto waitloop
 
 echo [3/3] 后端已就绪，正在打开网页...
 echo.
+
+rem 首次运行时跳过 streamlit 的邮箱输入提示（否则会卡住）
+if not exist "%USERPROFILE%\.streamlit\credentials.toml" (
+    if not exist "%USERPROFILE%\.streamlit" mkdir "%USERPROFILE%\.streamlit"
+    > "%USERPROFILE%\.streamlit\credentials.toml" echo [general]
+    >> "%USERPROFILE%\.streamlit\credentials.toml" echo email = ""
+)
+
 streamlit run streamlit_app.py

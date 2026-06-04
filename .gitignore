@@ -22,6 +22,9 @@ data/chroma/*
 .cache/
 *.bin
 
+# 日志
+*.log
+
 # 编辑器 / 系统
 .vscode/
 .idea/

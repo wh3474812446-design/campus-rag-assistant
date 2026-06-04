@@ -1,0 +1,6 @@
+[browser]
+gatherUsageStats = false
+
+[server]
+# 启动时自动在浏览器打开
+headless = false
