@@ -65,6 +65,17 @@ campus-rag-assistant/
 
 ## 🚀 快速开始
 
+### 🟢 最简单：Windows 一键安装（推荐新手）
+
+1. 安装 [Python 3.10+](https://www.python.org/downloads/)（安装时勾选 **Add Python to PATH**）
+2. 下载本项目（绿色 `Code` 按钮 → Download ZIP，解压）
+3. **双击 `install.bat`** —— 它会自动装好依赖，并引导你粘贴 DeepSeek API Key
+4. 安装完成后，以后每次使用 **双击 `start.bat`** 即可（浏览器会自动打开）
+
+> DeepSeek API Key 在 https://platform.deepseek.com 注册后于「API Keys」新建。
+
+下面是手动方式（适合开发者 / macOS / Linux）。
+
 ### 1. 准备环境
 
 ```bash
