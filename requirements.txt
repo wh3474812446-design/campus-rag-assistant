@@ -1,0 +1,24 @@
+# Web 框架
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9
+
+# 配置
+pydantic>=2.6
+pydantic-settings>=2.2
+python-dotenv>=1.0
+
+# LLM 调用（DeepSeek 走 OpenAI 兼容接口）
+openai>=1.30
+
+# 向量数据库 + 本地中文 embedding
+chromadb>=0.5.0
+sentence-transformers>=2.7.0
+
+# 文档解析
+pypdf>=4.2
+python-docx>=1.1
+
+# 前端
+streamlit>=1.35
+requests>=2.31
