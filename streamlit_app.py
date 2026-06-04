@@ -16,69 +16,74 @@ ALL_SCOPE = "🌐 全部知识库"
 
 st.set_page_config(page_title="RAG 知识库", page_icon="📚", layout="wide")
 
-# 暖米白 + 近黑 + 暖橙 复古极简风格
+# 深空黑 + 冷蓝辉光 科幻暗色风格
 _CSS = """
 <style>
 :root{
-  --cream:#EDE9DD; --cream-2:#F5F2E9; --ink:#1C1B19;
-  --muted:#7A7164; --line:#D9D1BF; --accent:#C0532E;
+  --bg:#0A0A0B; --panel:#161719; --panel-2:#1C1D20;
+  --text:#EAEAEC; --muted:#8A8B90; --line:rgba(255,255,255,.08);
+  --accent:#7AA2FF;
 }
-.stApp{ background:var(--cream); }
 
-/* 衬线大标题（中文用宋体系，英文用 Georgia 系） */
-h1,h2,h3,h4{
-  font-family:"Songti SC","STSong","Noto Serif SC","Source Han Serif SC",
-              Georgia,"Times New Roman",serif !important;
-  color:var(--ink) !important; letter-spacing:.5px;
+/* 深空黑底 + 左上冷蓝辉光 */
+.stApp{
+  background:
+    radial-gradient(820px 520px at 10% 20%, rgba(110,150,255,.13), transparent 60%),
+    var(--bg);
 }
-h1{ font-weight:700; letter-spacing:1px; }
+
+/* 标题：粗壮无衬线、近白 */
+h1,h2,h3,h4{
+  font-family:"Inter","Segoe UI","PingFang SC","Microsoft YaHei",sans-serif !important;
+  color:#F4F5F7 !important; font-weight:700; letter-spacing:.4px;
+}
 
 /* 正文 */
-.stApp, p, li, label, span{ color:var(--ink); }
-[data-testid="stCaptionContainer"], .stCaption{ color:var(--muted) !important; }
+.stApp, p, li, label, span{ color:var(--text); }
+[data-testid="stCaptionContainer"], .stCaption{ color:var(--muted) !important; letter-spacing:.3px; }
 
-/* 侧边栏：略深米色 + 细分隔线 */
+/* 侧边栏：更深 + 细分隔线 */
 section[data-testid="stSidebar"]{
-  background:#E6E0D1; border-right:1px solid var(--line);
+  background:#101113; border-right:1px solid var(--line);
 }
 
-/* 次要按钮：描边米色 */
+/* 次要按钮：深色描边 */
 .stButton button[kind="secondary"]{
-  background:var(--cream-2); color:var(--ink);
-  border:1px solid #C9C0AC; border-radius:9px; font-weight:600;
+  background:var(--panel-2); color:var(--text);
+  border:1px solid var(--line); border-radius:10px; font-weight:600;
   transition:all .15s ease;
 }
-.stButton button[kind="secondary"]:hover{ border-color:var(--ink); color:#000; }
+.stButton button[kind="secondary"]:hover{ border-color:var(--accent); color:#fff; }
 
-/* 主要按钮：黑底白字（对应图里的实心黑 CTA） */
+/* 主要按钮：白底黑字胶囊 + 蓝辉光（对应 INITIALIZE UPLINK） */
 .stButton button[kind="primary"], .stFormSubmitButton button{
-  background:var(--ink); color:var(--cream-2);
-  border:1px solid var(--ink); border-radius:9px; font-weight:600;
-  transition:all .15s ease;
+  background:#F5F6F8; color:#0A0A0B;
+  border:none; border-radius:999px; font-weight:700;
+  box-shadow:0 0 24px rgba(120,160,255,.18); transition:all .15s ease;
 }
 .stButton button[kind="primary"]:hover, .stFormSubmitButton button:hover{
-  background:#000; color:#fff;
+  background:#fff; box-shadow:0 0 32px rgba(120,160,255,.35);
 }
 
-/* 聊天输入框：米色卡片 + 圆角 */
-[data-testid="stChatInput"]{
-  background:var(--cream-2); border:1px solid var(--line); border-radius:12px;
-}
-
-/* 展开块 / 弹层：米色卡片 */
-[data-testid="stExpander"]{
-  border:1px solid var(--line); border-radius:10px; background:var(--cream-2);
-}
-
-/* 单选/输入控件背景统一米色 */
+/* 输入框 / 下拉 / 文本域：深色卡片 */
 [data-baseweb="select"]>div, .stTextInput input, .stTextArea textarea{
-  background:var(--cream-2) !important; border-color:var(--line) !important;
+  background:var(--panel-2) !important; border-color:var(--line) !important; color:var(--text) !important;
 }
 
-/* 链接与强调用暖橙 */
+/* 聊天输入框：深色圆角卡片 */
+[data-testid="stChatInput"]{
+  background:var(--panel-2); border:1px solid var(--line); border-radius:14px;
+}
+
+/* 展开块 / 聊天气泡：深色卡片 */
+[data-testid="stExpander"], [data-testid="stChatMessage"]{
+  background:var(--panel); border:1px solid var(--line); border-radius:14px;
+}
+
+/* 链接与强调用冷蓝 */
 a, a:visited{ color:var(--accent); }
 
-/* 顶部留白收紧一点，更像编辑排版 */
+/* 顶部留白 */
 .block-container{ padding-top:2.5rem; }
 </style>
 """

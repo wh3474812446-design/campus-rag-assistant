@@ -6,10 +6,10 @@ gatherUsageStats = false
 headless = false
 
 [theme]
-# 暖米白 + 近黑 + 暖橙 复古极简色板
-base = "light"
-primaryColor = "#C0532E"
-backgroundColor = "#EDE9DD"
-secondaryBackgroundColor = "#F5F2E9"
-textColor = "#1C1B19"
-font = "serif"
+# 深空黑 + 冷蓝辉光 科幻暗色色板
+base = "dark"
+primaryColor = "#7AA2FF"
+backgroundColor = "#0A0A0B"
+secondaryBackgroundColor = "#161719"
+textColor = "#EAEAEC"
+font = "sans serif"
