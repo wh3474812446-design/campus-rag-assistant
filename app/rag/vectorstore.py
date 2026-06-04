@@ -70,12 +70,14 @@ def search(query: str, top_k: int | None = None) -> list[dict]:
     )
 
     hits = []
+    ids = result["ids"][0]
     docs = result["documents"][0]
     metas = result["metadatas"][0]
     dists = result["distances"][0]
-    for doc, meta, dist in zip(docs, metas, dists):
+    for cid, doc, meta, dist in zip(ids, docs, metas, dists):
         hits.append(
             {
+                "id": cid,
                 "text": doc,
                 "source": meta.get("source", "未知"),
                 "doc_type": meta.get("doc_type", ""),
@@ -84,6 +86,26 @@ def search(query: str, top_k: int | None = None) -> list[dict]:
             }
         )
     return hits
+
+
+def get_all() -> list[dict]:
+    """取出库中全部文本块（供 BM25 关键词检索构建索引）。"""
+    collection = _get_collection()
+    if collection.count() == 0:
+        return []
+    data = collection.get(include=["documents", "metadatas"])
+    out = []
+    for cid, doc, meta in zip(data["ids"], data["documents"], data["metadatas"]):
+        out.append(
+            {
+                "id": cid,
+                "text": doc,
+                "source": meta.get("source", "未知"),
+                "doc_type": meta.get("doc_type", ""),
+                "chunk_index": meta.get("chunk_index", -1),
+            }
+        )
+    return out
 
 
 def list_documents() -> list[dict]:

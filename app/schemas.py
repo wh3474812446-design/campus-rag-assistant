@@ -12,6 +12,7 @@ class ChatRequest(BaseModel):
 class SourceItem(BaseModel):
     source: str
     score: float
+    method: str = "向量"
 
 
 class ChatResponse(BaseModel):

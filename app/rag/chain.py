@@ -10,7 +10,7 @@ from __future__ import annotations
 from openai import OpenAI
 
 from app.config import settings
-from app.rag.vectorstore import search
+from app.rag.retriever import hybrid_search
 
 _client: OpenAI | None = None
 
@@ -98,7 +98,13 @@ def _dedup_sources(hits: list[dict]) -> list[dict]:
     for h in hits:
         if h["source"] not in seen:
             seen.add(h["source"])
-            sources.append({"source": h["source"], "score": h["score"]})
+            sources.append(
+                {
+                    "source": h["source"],
+                    "score": h.get("score", 0.0),
+                    "method": h.get("method", "向量"),
+                }
+            )
     return sources
 
 
@@ -127,7 +133,7 @@ def answer(question: str, top_k: int | None = None, mode: str = "kb") -> dict:
         return {"answer": reply, "sources": []}
 
     # 知识库 / 混合：先检索
-    hits = search(question, top_k=top_k)
+    hits = hybrid_search(question, top_k=top_k)
 
     if not hits:
         if mode == "hybrid":

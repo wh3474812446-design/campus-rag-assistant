@@ -157,7 +157,7 @@ for msg in st.session_state.messages:
         if msg.get("sources"):
             with st.expander("📎 参考来源"):
                 for s in msg["sources"]:
-                    st.write(f"- 《{s['source']}》（相关度 {s['score']}）")
+                    st.write(f"- 《{s['source']}》（{s.get('method','向量')}命中 · 相关度 {s['score']}）")
 
 if prompt := st.chat_input("例如：奖学金评定的成绩占比是多少？"):
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -176,7 +176,7 @@ if prompt := st.chat_input("例如：奖学金评定的成绩占比是多少？"
                     if data["sources"]:
                         with st.expander("📎 参考来源"):
                             for s in data["sources"]:
-                                st.write(f"- 《{s['source']}》（相关度 {s['score']}）")
+                                st.write(f"- 《{s['source']}》（{s.get('method','向量')}命中 · 相关度 {s['score']}）")
                     st.session_state.messages.append(
                         {"role": "assistant", "content": data["answer"], "sources": data["sources"]}
                     )

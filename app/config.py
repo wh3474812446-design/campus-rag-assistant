@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     chunk_size: int = 500
     chunk_overlap: int = 80
     top_k: int = 4
+    retrieval_candidates: int = 10  # 混合检索时每路召回的候选数
 
     # 存储
     chroma_dir: str = "data/chroma"
