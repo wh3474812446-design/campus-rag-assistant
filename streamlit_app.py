@@ -25,12 +25,18 @@ _CSS = """
   --accent:#7AA2FF;
 }
 
-/* 深空黑底 + 左上冷蓝辉光 */
+/* 深空黑底 + 柔和冷蓝辉光（多层渐变，整页平滑过渡，无硬边） */
 .stApp{
   background:
-    radial-gradient(820px 520px at 10% 20%, rgba(110,150,255,.13), transparent 60%),
-    var(--bg);
+    radial-gradient(1300px 820px at 52% -12%, rgba(110,150,255,.12), transparent 62%),
+    radial-gradient(820px 680px at 6% 4%, rgba(120,150,255,.07), transparent 55%),
+    linear-gradient(180deg, #0C0D11 0%, #0A0A0B 55%, #08080A 100%);
+  background-attachment: fixed;
 }
+
+/* 顶栏透明：消除顶部那条突兀的纯黑横带，让背景贯通 */
+[data-testid="stHeader"]{ background:transparent; box-shadow:none; }
+[data-testid="stToolbar"]{ right:1rem; }
 
 /* 标题：粗壮无衬线、近白 */
 h1,h2,h3,h4{
