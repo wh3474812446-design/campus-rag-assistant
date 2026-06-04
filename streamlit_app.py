@@ -87,8 +87,65 @@ with st.sidebar:
         st.warning("⚠️ 后端未连接。请先运行 `uvicorn app.main:app`。")
 
 
-# ---------- 主区：聊天 ----------
-st.title("🎓 校园政策问答助手")
+# ---------- 顶部：标题 + 右上角 API 设置 ----------
+def render_api_settings() -> None:
+    """右上角「API 设置」弹出框：填/换 key、选模型、测试连接。"""
+    try:
+        cfg = requests.get(api("/config"), timeout=10).json()
+    except requests.RequestException:
+        st.error("后端未连接，无法配置。")
+        return
+
+    if cfg["configured"]:
+        st.success(f"已配置　当前 Key：`{cfg['api_key_masked']}`")
+    else:
+        st.warning("尚未配置 API Key，请在下方填写后保存。")
+
+    new_key = st.text_input(
+        "DeepSeek API Key",
+        type="password",
+        placeholder="sk-...（留空则不修改）",
+        help="在 https://platform.deepseek.com 的「API Keys」里新建获取",
+    )
+    models = ["deepseek-chat", "deepseek-reasoner"]
+    cur_model = cfg["model"] if cfg["model"] in models else models[0]
+    model = st.selectbox("模型", models, index=models.index(cur_model))
+    base_url = st.text_input("API 地址（一般不用改）", value=cfg["base_url"])
+
+    c1, c2 = st.columns(2)
+    if c1.button("💾 保存", use_container_width=True, type="primary"):
+        payload = {"model": model, "base_url": base_url}
+        if new_key.strip():
+            payload["api_key"] = new_key.strip()
+        try:
+            r = requests.post(api("/config"), json=payload, timeout=15)
+            if r.ok:
+                st.success("已保存！")
+                st.rerun()
+            else:
+                st.error(f"保存失败：{r.text}")
+        except requests.RequestException as e:
+            st.error(f"保存失败：{e}")
+    if c2.button("🔌 测试连接", use_container_width=True):
+        with st.spinner("测试中..."):
+            try:
+                r = requests.post(api("/config/test"), timeout=30).json()
+                if r["ok"]:
+                    st.success(r["message"])
+                else:
+                    st.error(f"失败：{r['message'][:300]}")
+            except requests.RequestException as e:
+                st.error(f"测试失败：{e}")
+
+
+top_left, top_right = st.columns([0.72, 0.28])
+with top_left:
+    st.title("🎓 校园政策问答助手")
+with top_right:
+    st.write("")  # 占位，让按钮和标题大致齐平
+    with st.popover("⚙️ API 设置", use_container_width=True):
+        render_api_settings()
+
 st.caption("基于你上传的学校文件，引用原文回答教务、实习、奖学金、转专业等问题。")
 
 if "messages" not in st.session_state:

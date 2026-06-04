@@ -58,3 +58,28 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
+
+
+def update_env_file(values: dict[str, str]) -> None:
+    """更新（或新增）.env 中的键值，保留其他行与注释，写出无 BOM 的 UTF-8。"""
+    env_path = BASE_DIR / ".env"
+    lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.exists() else []
+
+    done: set[str] = set()
+    out: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            key = stripped.split("=", 1)[0].strip()
+            if key in values:
+                out.append(f"{key}={values[key]}")
+                done.add(key)
+                continue
+        out.append(line)
+
+    for key, val in values.items():
+        if key not in done:
+            out.append(f"{key}={val}")
+
+    # Python 的 utf-8 编码不带 BOM
+    env_path.write_text("\n".join(out) + "\n", encoding="utf-8")

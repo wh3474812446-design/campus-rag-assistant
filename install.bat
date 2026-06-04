@@ -47,8 +47,8 @@ if not "%APIKEY%"=="" (
     powershell -NoProfile -Command "$c=[IO.File]::ReadAllText('.env'); $c=[Regex]::Replace($c,'(?m)^DEEPSEEK_API_KEY=.*$','DEEPSEEK_API_KEY=%APIKEY%'); [IO.File]::WriteAllText('.env',$c,(New-Object Text.UTF8Encoding $false))"
     echo   [OK] 已写入 .env。
 ) else (
-    echo   [!] 已跳过。请稍后用记事本打开 .env 文件，
-    echo       把 DEEPSEEK_API_KEY= 后面改成你自己的 key 再保存。
+    echo   [!] 已跳过。没关系，启动后也可以直接在网页右上角的
+    echo       「⚙️ API 设置」里填写 key，无需改任何文件。
 )
 echo.
 

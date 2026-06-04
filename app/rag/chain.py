@@ -45,12 +45,44 @@ def _get_client() -> OpenAI:
     global _client
     if _client is None:
         if not settings.deepseek_api_key:
-            raise RuntimeError("未配置 DEEPSEEK_API_KEY，请在 .env 中填写。")
+            raise RuntimeError("未配置 DEEPSEEK_API_KEY，请在网页右上角「API 设置」中填写。")
         _client = OpenAI(
             api_key=settings.deepseek_api_key,
             base_url=settings.deepseek_base_url,
         )
     return _client
+
+
+def set_credentials(
+    api_key: str | None = None,
+    base_url: str | None = None,
+    model: str | None = None,
+) -> None:
+    """运行时更新 API 配置，并重置客户端使其下次用新配置重建。"""
+    global _client
+    if api_key:
+        settings.deepseek_api_key = api_key
+    if base_url:
+        settings.deepseek_base_url = base_url
+    if model:
+        settings.deepseek_model = model
+    _client = None
+
+
+def test_connection() -> tuple[bool, str]:
+    """用一次最小请求测试当前配置是否可用。"""
+    if not settings.deepseek_api_key:
+        return False, "尚未填写 API Key"
+    try:
+        client = _get_client()
+        client.chat.completions.create(
+            model=settings.deepseek_model,
+            messages=[{"role": "user", "content": "ping"}],
+            max_tokens=1,
+        )
+        return True, f"连接成功（模型：{settings.deepseek_model}）"
+    except Exception as e:  # noqa: BLE001
+        return False, str(e)
 
 
 def _build_context(hits: list[dict]) -> str:

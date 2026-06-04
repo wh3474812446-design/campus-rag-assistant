@@ -41,3 +41,21 @@ class DocumentList(BaseModel):
 class DeleteResult(BaseModel):
     source: str
     deleted_chunks: int
+
+
+class ConfigInfo(BaseModel):
+    configured: bool
+    api_key_masked: str
+    base_url: str
+    model: str
+
+
+class ConfigUpdate(BaseModel):
+    api_key: str | None = None
+    base_url: str | None = None
+    model: str | None = None
+
+
+class TestResult(BaseModel):
+    ok: bool
+    message: str
