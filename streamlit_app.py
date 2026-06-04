@@ -18,8 +18,32 @@ def api(path: str) -> str:
     return f"{BACKEND_URL}/api{path}"
 
 
-# ---------- 侧边栏：文档管理 ----------
+# 模式：显示名 -> 后端参数
+MODE_OPTIONS = {
+    "📚 知识库问答（只照文件答）": "kb",
+    "🔀 知识库 + AI 补充": "hybrid",
+    "💬 通用助手（什么都能聊）": "general",
+}
+
+# ---------- 侧边栏：模式 + 文档管理 ----------
 with st.sidebar:
+    st.header("🧭 回答模式")
+    mode_label = st.radio(
+        "选择助手的回答方式",
+        list(MODE_OPTIONS.keys()),
+        index=0,
+        help="知识库模式只依据你上传的文件；通用助手可回答任何问题。",
+    )
+    mode = MODE_OPTIONS[mode_label]
+    st.caption(
+        {
+            "kb": "只依据上传的文件回答，带原文出处，绝不编造。",
+            "hybrid": "优先用文件；文件没有的，用 AI 通用知识补充并标注。",
+            "general": "完全放开的 DeepSeek，可写作、翻译、解释概念、写代码等。",
+        }[mode]
+    )
+
+    st.divider()
     st.header("📚 知识库管理")
 
     uploaded = st.file_uploader(
@@ -86,7 +110,9 @@ if prompt := st.chat_input("例如：奖学金评定的成绩占比是多少？"
     with st.chat_message("assistant"):
         with st.spinner("正在检索原文并思考..."):
             try:
-                resp = requests.post(api("/chat"), json={"question": prompt}, timeout=120)
+                resp = requests.post(
+                    api("/chat"), json={"question": prompt, "mode": mode}, timeout=120
+                )
                 if resp.ok:
                     data = resp.json()
                     st.markdown(data["answer"])

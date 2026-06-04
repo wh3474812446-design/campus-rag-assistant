@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 class ChatRequest(BaseModel):
     question: str = Field(..., min_length=1, description="用户的问题")
     top_k: int | None = Field(None, description="检索条数，默认用配置值")
+    mode: str = Field("kb", description="问答模式：kb=知识库严格 / hybrid=知识库+AI补充 / general=通用助手")
 
 
 class SourceItem(BaseModel):

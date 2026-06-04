@@ -57,7 +57,7 @@ async def upload(file: UploadFile = File(...)) -> UploadResult:
 def chat(req: ChatRequest) -> ChatResponse:
     """基于知识库原文回答问题。"""
     try:
-        result = rag_answer(req.question, top_k=req.top_k)
+        result = rag_answer(req.question, top_k=req.top_k, mode=req.mode)
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
     return ChatResponse(**result)
