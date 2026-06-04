@@ -60,3 +60,19 @@ class ConfigUpdate(BaseModel):
 class TestResult(BaseModel):
     ok: bool
     message: str
+
+
+class TraceRequest(BaseModel):
+    answer: str = Field(..., min_length=1)
+
+
+class TraceItem(BaseModel):
+    answer_sentence: str
+    source_sentence: str
+    source: str
+    chunk_text: str
+    score: float
+
+
+class TraceResponse(BaseModel):
+    items: list[TraceItem]

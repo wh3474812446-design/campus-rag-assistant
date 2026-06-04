@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 
 from app.config import settings, update_env_file
 from app.rag import vectorstore
 from app.rag.chain import answer as rag_answer
-from app.rag.chain import set_credentials, test_connection
+from app.rag.chain import answer_stream, set_credentials, test_connection
 from app.rag.indexer import ingest_file
 from app.rag.loader import SUPPORTED_EXTENSIONS
+from app.rag.tracer import trace as trace_sentences
 from app.schemas import (
     ChatRequest,
     ChatResponse,
@@ -22,6 +25,9 @@ from app.schemas import (
     DocumentItem,
     DocumentList,
     TestResult,
+    TraceItem,
+    TraceRequest,
+    TraceResponse,
     UploadResult,
 )
 
@@ -107,6 +113,29 @@ def chat(req: ChatRequest) -> ChatResponse:
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
     return ChatResponse(**result)
+
+
+@router.post("/chat/stream")
+def chat_stream(req: ChatRequest) -> StreamingResponse:
+    """流式问答（SSE）：先发 sources 事件，再逐段发 token 事件。"""
+
+    def event_gen():
+        try:
+            for kind, payload in answer_stream(req.question, top_k=req.top_k, mode=req.mode):
+                key = "sources" if kind == "sources" else "token"
+                yield "data: " + json.dumps({key: payload}, ensure_ascii=False) + "\n\n"
+            yield "data: [DONE]\n\n"
+        except Exception as e:  # noqa: BLE001
+            yield "data: " + json.dumps({"error": str(e)}, ensure_ascii=False) + "\n\n"
+
+    return StreamingResponse(event_gen(), media_type="text/event-stream")
+
+
+@router.post("/trace", response_model=TraceResponse)
+def trace(req: TraceRequest) -> TraceResponse:
+    """逐句溯源：为答案的每句话找到原文依据句。"""
+    items = trace_sentences(req.answer)
+    return TraceResponse(items=[TraceItem(**it) for it in items])
 
 
 @router.get("/documents", response_model=DocumentList)

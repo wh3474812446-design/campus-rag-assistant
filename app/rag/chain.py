@@ -122,6 +122,24 @@ def _call_llm(system_prompt: str, user_prompt: str, temperature: float) -> str:
     return resp.choices[0].message.content
 
 
+def _stream_llm(system_prompt: str, user_prompt: str, temperature: float):
+    """逐 token 产出大模型回答。"""
+    client = _get_client()
+    stream = client.chat.completions.create(
+        model=settings.deepseek_model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        temperature=temperature,
+        stream=True,
+    )
+    for chunk in stream:
+        delta = chunk.choices[0].delta.content
+        if delta:
+            yield delta
+
+
 def answer(question: str, top_k: int | None = None, mode: str = "kb") -> dict:
     """对外主入口：返回 {answer, sources}。mode ∈ {kb, hybrid, general}。"""
     if mode not in VALID_MODES:
@@ -159,3 +177,35 @@ def answer(question: str, top_k: int | None = None, mode: str = "kb") -> dict:
         reply = _call_llm(SYSTEM_PROMPT_KB, user_prompt, temperature=0.2)
 
     return {"answer": reply, "sources": _dedup_sources(hits)}
+
+
+def answer_stream(question: str, top_k: int | None = None, mode: str = "kb"):
+    """流式版本：先 yield ("sources", [...])，再逐段 yield ("token", str)。"""
+    if mode not in VALID_MODES:
+        mode = "kb"
+
+    if mode == "general":
+        yield ("sources", [])
+        yield from (("token", t) for t in _stream_llm(SYSTEM_PROMPT_GENERAL, question, 0.7))
+        return
+
+    hits = hybrid_search(question, top_k=top_k)
+
+    if not hits:
+        if mode == "hybrid":
+            yield ("sources", [])
+            yield ("token", "（⚠️ 知识库中暂无相关文件，以下为 AI 通用回答，请以学校最新规定为准）\n\n")
+            yield from (("token", t) for t in _stream_llm(SYSTEM_PROMPT_GENERAL, question, 0.7))
+            return
+        yield ("sources", [])
+        yield ("token", "知识库还是空的，请先上传学生手册、教务通知等文件再提问。")
+        return
+
+    yield ("sources", _dedup_sources(hits))
+
+    context = _build_context(hits)
+    user_prompt = f"参考资料如下：\n\n{context}\n\n请根据以上资料回答问题：{question}"
+    if mode == "hybrid":
+        yield from (("token", t) for t in _stream_llm(SYSTEM_PROMPT_HYBRID, user_prompt, 0.4))
+    else:
+        yield from (("token", t) for t in _stream_llm(SYSTEM_PROMPT_KB, user_prompt, 0.2))

@@ -4,6 +4,8 @@
 （需要后端已启动：uvicorn app.main:app）
 """
 
+import html
+import json
 import os
 
 import requests
@@ -151,37 +153,109 @@ st.caption("基于你上传的学校文件，引用原文回答教务、实习�
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-for msg in st.session_state.messages:
+
+def render_sources(sources: list) -> None:
+    if sources:
+        with st.expander("📎 参考来源"):
+            for s in sources:
+                st.write(
+                    f"- 《{s['source']}》（{s.get('method', '向量')}命中 · 相关度 {s['score']}）"
+                )
+
+
+def render_trace(items: list) -> None:
+    if not items:
+        st.caption("未能为答案找到明确对应的原文句子。")
+        return
+    for it in items:
+        label = f"「{it['answer_sentence'][:36]}…」 → 《{it['source']}》(相似度 {it['score']})"
+        with st.expander(label):
+            safe_chunk = html.escape(it["chunk_text"])
+            safe_sent = html.escape(it["source_sentence"])
+            highlighted = safe_chunk.replace(
+                safe_sent, f"<mark style='background:#ffe58f'>{safe_sent}</mark>", 1
+            )
+            st.markdown(
+                f"<div style='line-height:1.8'>{highlighted}</div>",
+                unsafe_allow_html=True,
+            )
+
+
+def do_trace(answer_text: str) -> list:
+    try:
+        r = requests.post(api("/trace"), json={"answer": answer_text}, timeout=120)
+        return r.json().get("items", []) if r.ok else []
+    except requests.RequestException:
+        return []
+
+
+# ---------- 历史消息 ----------
+for idx, msg in enumerate(st.session_state.messages):
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
-        if msg.get("sources"):
-            with st.expander("📎 参考来源"):
-                for s in msg["sources"]:
-                    st.write(f"- 《{s['source']}》（{s.get('method','向量')}命中 · 相关度 {s['score']}）")
+        if msg["role"] == "assistant":
+            render_sources(msg.get("sources"))
+            if msg.get("sources"):  # 只有基于知识库的回答才溯源
+                if msg.get("trace") is None:
+                    if st.button("🔎 逐句溯源", key=f"trace_{idx}"):
+                        with st.spinner("正在逐句比对原文..."):
+                            msg["trace"] = do_trace(msg["content"])
+                        st.rerun()
+                else:
+                    st.markdown("**🔎 逐句溯源**（点开每句看原文依据，黄色为依据句）")
+                    render_trace(msg["trace"])
 
+
+# ---------- 新提问（流式） ----------
 if prompt := st.chat_input("例如：奖学金评定的成绩占比是多少？"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("正在检索原文并思考..."):
+        sources_holder: list = []
+        error_holder: list = []
+
+        def token_gen():
             try:
                 resp = requests.post(
-                    api("/chat"), json={"question": prompt, "mode": mode}, timeout=120
+                    api("/chat/stream"),
+                    json={"question": prompt, "mode": mode},
+                    stream=True,
+                    timeout=300,
                 )
-                if resp.ok:
-                    data = resp.json()
-                    st.markdown(data["answer"])
-                    if data["sources"]:
-                        with st.expander("📎 参考来源"):
-                            for s in data["sources"]:
-                                st.write(f"- 《{s['source']}》（{s.get('method','向量')}命中 · 相关度 {s['score']}）")
-                    st.session_state.messages.append(
-                        {"role": "assistant", "content": data["answer"], "sources": data["sources"]}
-                    )
-                else:
-                    err = resp.json().get("detail", resp.text)
-                    st.error(f"出错了：{err}")
             except requests.RequestException as e:
-                st.error(f"连接后端失败：{e}")
+                error_holder.append(str(e))
+                return
+            resp.encoding = "utf-8"  # SSE 默认编码会导致中文乱码，强制 utf-8
+            for line in resp.iter_lines(decode_unicode=True):
+                if not line or not line.startswith("data: "):
+                    continue
+                data = line[6:]
+                if data == "[DONE]":
+                    break
+                try:
+                    obj = json.loads(data)
+                except json.JSONDecodeError:
+                    continue
+                if "sources" in obj:
+                    sources_holder.extend(obj["sources"])
+                elif "token" in obj:
+                    yield obj["token"]
+                elif "error" in obj:
+                    error_holder.append(obj["error"])
+
+        answer_text = st.write_stream(token_gen())
+        if error_holder:
+            st.error(f"出错了：{error_holder[0]}")
+        render_sources(sources_holder)
+
+    st.session_state.messages.append(
+        {
+            "role": "assistant",
+            "content": answer_text or "（无内容）",
+            "sources": sources_holder,
+            "trace": None,
+        }
+    )
+    st.rerun()
