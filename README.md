@@ -26,40 +26,82 @@
 
 ## 🏛️ 项目架构
 
+整个系统分两个阶段：**建库**（上传文档时做一次）和**提问**（每次问答）。
+核心理念：**本地负责"找料"，云端 DeepSeek 只负责"读料后讲人话"。**
+
+### 阶段 ① 建库（上传文档时）
+
 ```
-用户提问
-   │
+拖入文档 (PDF/Word/TXT/MD)
+   │  /upload
    ▼
-[Streamlit 前端] ──HTTP──> [FastAPI 后端]
-                               │
-                ┌──────────────┼───────────────┐
-                ▼              ▼                ▼
-          文档解析+切分    BGE 本地向量化      DeepSeek 大模型
-          (loader/splitter) (embeddings)       (chain)
-                              │                    ▲
-                              ▼                    │
-                        [Chroma 向量库] ──检索原文──┘
+解析成纯文字        loader.py     (pypdf / python-docx)
+   ▼
+中文递归切分成小块   splitter.py
+   ▼
+本地 BGE 向量化     embeddings.py (sentence-transformers + BGE)
+   ▼
+向量 + 原文 入库     vectorstore.py → Chroma 持久化到 data/chroma/
 ```
 
-目录结构：
+### 阶段 ② 提问（混合检索 + 生成）
+
+```
+你的问题
+   │  /chat
+   ▼
+┌─────────── 混合检索 retriever.py（两路并行）───────────┐
+│  ① BGE 把问题转向量 → Chroma 找"语义相近"的块          │
+│  ② jieba 分词 → BM25 找"词面命中"的块                  │
+│            ▼  RRF 倒数排名融合，合并两路结果            │
+└────────────────────────┬───────────────────────────────┘
+                         ▼
+   拼 prompt：原文 + 问题 + 角色设定   chain.py
+                         ▼
+              ☁️ DeepSeek 思考并组织语言（联网）
+                         ▼
+              答案 + 来源（标注命中方式）→ 网页
+```
+
+### 本地 vs 云端
+
+| 在哪 | 做什么 | 成本 |
+|---|---|---|
+| 🖥️ **本地** | 文档解析、切分、BGE 向量化、Chroma 向量库、jieba 分词、BM25、RRF 融合、前后端 | 免费、离线、不出本机 |
+| ☁️ **云端** | 仅"读检索到的原文 → 生成回答"由 DeepSeek 完成 | 联网，按量计费 |
+
+### 本地模型
+
+| 模型 | 用途 | 大小 |
+|---|---|---|
+| **BAAI/bge-small-zh-v1.5** | 文本向量化（唯一的本地神经网络模型，中文专用，512 维） | ~100 MB，首次自动下载并缓存 |
+| **jieba 词典** | 中文分词（供 BM25 使用，非神经网络） | 随依赖安装 |
+
+> DeepSeek 不是本地模型，它在云端，需要 API Key + 联网。
+
+### 目录结构
 
 ```
 campus-rag-assistant/
 ├── app/
-│   ├── config.py            # 配置（读 .env）
+│   ├── config.py            # 配置（读/写 .env）
 │   ├── main.py              # FastAPI 入口
 │   ├── schemas.py           # 请求/响应模型
-│   ├── api/routes.py        # 接口：/upload /chat /documents
+│   ├── api/routes.py        # 接口：/upload /chat /documents /config
 │   └── rag/
 │       ├── loader.py        # PDF/Word/TXT/MD 解析
 │       ├── splitter.py      # 中文文本切分
 │       ├── embeddings.py    # 本地 BGE 向量化
 │       ├── vectorstore.py   # Chroma 向量库读写
+│       ├── retriever.py     # 混合检索（BM25 + 向量，RRF 融合）
 │       ├── indexer.py       # 入库流水线
-│       └── chain.py         # RAG 问答（调 DeepSeek）
-├── streamlit_app.py         # 网页前端
+│       └── chain.py         # 三种模式问答（调 DeepSeek）
+├── streamlit_app.py         # 网页前端（聊天 / 上传 / 模式 / API 设置）
 ├── scripts/ingest.py        # 命令行批量入库
 ├── data/samples/            # 5 份示例文件，可直接测试
+├── install.bat              # Windows 一键安装
+├── start.bat                # Windows 一键启动（前后端 + 自动开网页）
+├── .streamlit/config.toml   # streamlit 配置
 ├── requirements.txt
 └── .env.example
 ```
@@ -183,7 +225,8 @@ curl -X POST http://127.0.0.1:8000/api/chat \
 | `EMBEDDING_MODEL_NAME`| `BAAI/bge-small-zh-v1.5` | 本地向量模型（可换 large） |
 | `CHUNK_SIZE`          | `500`                    | 文本切块大小               |
 | `CHUNK_OVERLAP`       | `80`                     | 相邻块重叠字符数           |
-| `TOP_K`               | `4`                      | 每次检索的段落数           |
+| `TOP_K`               | `4`                      | 最终送给大模型的段落数     |
+| `RETRIEVAL_CANDIDATES`| `10`                     | 混合检索时每路召回的候选数 |
 
 ---
 
@@ -192,7 +235,8 @@ curl -X POST http://127.0.0.1:8000/api/chat \
 - **后端**：FastAPI + Uvicorn
 - **前端**：Streamlit
 - **向量库**：Chroma（本地持久化）
-- **向量模型**：sentence-transformers + BGE 中文模型
+- **向量模型**：sentence-transformers + BGE 中文模型（`bge-small-zh-v1.5`）
+- **混合检索**：rank-bm25（关键词）+ jieba（中文分词）+ RRF 融合
 - **大模型**：DeepSeek（OpenAI 兼容接口）
 - **文档解析**：pypdf / python-docx
 
