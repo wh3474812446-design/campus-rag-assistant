@@ -7,6 +7,7 @@ class ChatRequest(BaseModel):
     question: str = Field(..., min_length=1, description="用户的问题")
     top_k: int | None = Field(None, description="检索条数，默认用配置值")
     mode: str = Field("kb", description="问答模式：kb=知识库严格 / hybrid=知识库+AI补充 / general=通用助手")
+    folder: str | None = Field(None, description="限定在某个文件夹（知识库分区）内检索，None=全部")
 
 
 class SourceItem(BaseModel):
@@ -23,6 +24,7 @@ class ChatResponse(BaseModel):
 class UploadResult(BaseModel):
     source: str
     doc_type: str
+    folder: str
     chars: int
     chunks: int
 
@@ -30,6 +32,7 @@ class UploadResult(BaseModel):
 class DocumentItem(BaseModel):
     source: str
     doc_type: str
+    folder: str
     chunks: int
 
 
@@ -42,6 +45,20 @@ class DocumentList(BaseModel):
 class DeleteResult(BaseModel):
     source: str
     deleted_chunks: int
+
+
+class FolderList(BaseModel):
+    folders: list[str]
+
+
+class FolderCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=50)
+
+
+class FolderResult(BaseModel):
+    ok: bool
+    folders: list[str]
+    deleted_chunks: int = 0
 
 
 class ConfigInfo(BaseModel):

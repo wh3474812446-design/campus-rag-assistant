@@ -17,6 +17,7 @@ data/uploads/*
 !data/uploads/.gitkeep
 data/chroma/*
 !data/chroma/.gitkeep
+data/folders.json
 
 # 模型缓存
 .cache/

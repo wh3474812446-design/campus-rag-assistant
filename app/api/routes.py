@@ -6,10 +6,11 @@ import json
 import shutil
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
 from app.config import settings, update_env_file
+from app.rag import folders as folder_mgr
 from app.rag import vectorstore
 from app.rag.chain import answer as rag_answer
 from app.rag.chain import answer_stream, set_credentials, test_connection
@@ -24,6 +25,9 @@ from app.schemas import (
     DeleteResult,
     DocumentItem,
     DocumentList,
+    FolderCreate,
+    FolderList,
+    FolderResult,
     TestResult,
     TraceItem,
     TraceRequest,
@@ -82,8 +86,11 @@ def test_config() -> TestResult:
 
 
 @router.post("/upload", response_model=UploadResult)
-async def upload(file: UploadFile = File(...)) -> UploadResult:
-    """上传一个文件并自动构建知识库。"""
+async def upload(
+    file: UploadFile = File(...),
+    folder: str = Form("默认"),
+) -> UploadResult:
+    """上传一个文件到指定文件夹并自动构建知识库。"""
     filename = file.filename or "未命名"
     ext = Path(filename).suffix.lower()
     if ext not in SUPPORTED_EXTENSIONS:
@@ -92,16 +99,22 @@ async def upload(file: UploadFile = File(...)) -> UploadResult:
             detail=f"不支持的文件类型 {ext}，支持：{', '.join(sorted(SUPPORTED_EXTENSIONS))}",
         )
 
-    save_path = settings.upload_path / filename
+    folder = (folder or "默认").strip() or "默认"
+    # 同名文件按 文件夹 分目录存放，避免覆盖
+    save_dir = settings.upload_path / folder
+    save_dir.mkdir(parents=True, exist_ok=True)
+    save_path = save_dir / filename
     with save_path.open("wb") as f:
         shutil.copyfileobj(file.file, f)
 
     try:
-        result = ingest_file(save_path)
+        result = ingest_file(save_path, folder=folder)
     except ValueError as e:
         save_path.unlink(missing_ok=True)
         raise HTTPException(status_code=422, detail=str(e))
 
+    # 确保该文件夹出现在文件夹列表里
+    folder_mgr.create_folder(folder)
     return UploadResult(**result)
 
 
@@ -109,7 +122,7 @@ async def upload(file: UploadFile = File(...)) -> UploadResult:
 def chat(req: ChatRequest) -> ChatResponse:
     """基于知识库原文回答问题。"""
     try:
-        result = rag_answer(req.question, top_k=req.top_k, mode=req.mode)
+        result = rag_answer(req.question, top_k=req.top_k, mode=req.mode, folder=req.folder)
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
     return ChatResponse(**result)
@@ -121,7 +134,9 @@ def chat_stream(req: ChatRequest) -> StreamingResponse:
 
     def event_gen():
         try:
-            for kind, payload in answer_stream(req.question, top_k=req.top_k, mode=req.mode):
+            for kind, payload in answer_stream(
+                req.question, top_k=req.top_k, mode=req.mode, folder=req.folder
+            ):
                 key = "sources" if kind == "sources" else "token"
                 yield "data: " + json.dumps({key: payload}, ensure_ascii=False) + "\n\n"
             yield "data: [DONE]\n\n"
@@ -149,10 +164,41 @@ def documents() -> DocumentList:
 
 
 @router.delete("/documents/{source}", response_model=DeleteResult)
-def delete_document(source: str) -> DeleteResult:
-    deleted = vectorstore.delete_document(source)
+def delete_document(source: str, folder: str | None = None) -> DeleteResult:
+    deleted = vectorstore.delete_document(source, folder=folder)
     if deleted == 0:
         raise HTTPException(status_code=404, detail=f"未找到文档：{source}")
     # 同时删掉本地文件
+    if folder:
+        (settings.upload_path / folder / source).unlink(missing_ok=True)
     (settings.upload_path / source).unlink(missing_ok=True)
     return DeleteResult(source=source, deleted_chunks=deleted)
+
+
+# ---------- 文件夹（知识库分区）管理 ----------
+@router.get("/folders", response_model=FolderList)
+def list_folders() -> FolderList:
+    return FolderList(folders=folder_mgr.list_folders(extra=vectorstore.existing_folders()))
+
+
+@router.post("/folders", response_model=FolderResult)
+def create_folder(req: FolderCreate) -> FolderResult:
+    ok = folder_mgr.create_folder(req.name)
+    folders = folder_mgr.list_folders(extra=vectorstore.existing_folders())
+    if not ok:
+        raise HTTPException(status_code=400, detail="文件夹已存在或名称非法")
+    return FolderResult(ok=True, folders=folders)
+
+
+@router.delete("/folders/{name}", response_model=FolderResult)
+def delete_folder(name: str) -> FolderResult:
+    if name == folder_mgr.DEFAULT_FOLDER:
+        raise HTTPException(status_code=400, detail="默认文件夹不可删除")
+    deleted = vectorstore.delete_folder_docs(name)
+    folder_mgr.delete_folder(name)
+    # 删掉该文件夹的本地上传目录
+    import shutil as _shutil
+
+    _shutil.rmtree(settings.upload_path / name, ignore_errors=True)
+    folders = folder_mgr.list_folders(extra=vectorstore.existing_folders())
+    return FolderResult(ok=True, folders=folders, deleted_chunks=deleted)

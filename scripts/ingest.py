@@ -24,10 +24,11 @@ from app.rag.loader import SUPPORTED_EXTENSIONS  # noqa: E402
 
 def main() -> None:
     if len(sys.argv) < 2:
-        print("用法: python scripts/ingest.py <文件或目录路径>")
+        print("用法: python scripts/ingest.py <文件或目录路径> [文件夹名]")
         sys.exit(1)
 
     target = Path(sys.argv[1])
+    folder = sys.argv[2] if len(sys.argv) > 2 else "默认"
     if not target.exists():
         print(f"路径不存在: {target}")
         sys.exit(1)
@@ -41,11 +42,11 @@ def main() -> None:
         print("没有找到可处理的文件。")
         return
 
-    print(f"准备处理 {len(files)} 个文件...\n")
+    print(f"准备处理 {len(files)} 个文件 → 文件夹「{folder}」...\n")
     for f in files:
         try:
-            r = ingest_file(f)
-            print(f"✅ {r['source']:30} [{r['doc_type']}] {r['chars']} 字 -> {r['chunks']} 块")
+            r = ingest_file(f, folder=folder)
+            print(f"✅ {r['source']:30} [{r['folder']}] {r['chars']} 字 -> {r['chunks']} 块")
         except Exception as e:  # noqa: BLE001
             print(f"❌ {f.name}: {e}")
 

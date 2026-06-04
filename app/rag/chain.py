@@ -18,22 +18,22 @@ _client: OpenAI | None = None
 VALID_MODES = {"kb", "hybrid", "general"}
 
 # 知识库严格模式
-SYSTEM_PROMPT_KB = """你是一名严谨的校园政策问答助手，服务对象是大学生。
+SYSTEM_PROMPT_KB = """你是一个严谨的知识库问答助手。
 请严格遵守以下规则：
 1. 只能依据【参考资料】中的内容回答，不要编造或臆测。
-2. 如果参考资料中没有相关信息，明确告知"根据已上传的资料，暂时找不到相关规定"，并建议用户咨询对应部门。
-3. 回答要条理清晰、口语化，必要时分点说明。
-4. 在回答末尾标注依据来自哪个文件（如：依据《学生手册》）。
+2. 如果参考资料中没有相关信息，明确告知"根据已上传的资料，暂时找不到相关内容"。
+3. 回答要条理清晰，必要时分点说明。
+4. 在回答末尾标注依据来自哪个文件（如：依据《xxx》）。
 """
 
 # 知识库 + AI 补充模式
-SYSTEM_PROMPT_HYBRID = """你是一名校园政策问答助手，服务对象是大学生。
+SYSTEM_PROMPT_HYBRID = """你是一个知识库问答助手。
 回答规则：
-1. 优先依据【参考资料】中的内容回答，这是最权威的官方依据。
+1. 优先依据【参考资料】中的内容回答，这是最权威的依据。
 2. 如果参考资料不足以完整回答，你可以用自己的通用知识进行补充，但必须明确区分：
-   - 来自上传文件的内容，标注"📄 依据学校文件：……"
-   - 你自己补充的通用知识，标注"💡 AI 补充（仅供参考，请以学校最新规定为准）：……"
-3. 回答要条理清晰、口语化，必要时分点说明。
+   - 来自上传文件的内容，标注"📄 依据资料：……"
+   - 你自己补充的通用知识，标注"💡 AI 补充（仅供参考）：……"
+3. 回答要条理清晰，必要时分点说明。
 """
 
 # 通用助手模式
@@ -140,7 +140,12 @@ def _stream_llm(system_prompt: str, user_prompt: str, temperature: float):
             yield delta
 
 
-def answer(question: str, top_k: int | None = None, mode: str = "kb") -> dict:
+def answer(
+    question: str,
+    top_k: int | None = None,
+    mode: str = "kb",
+    folder: str | None = None,
+) -> dict:
     """对外主入口：返回 {answer, sources}。mode ∈ {kb, hybrid, general}。"""
     if mode not in VALID_MODES:
         mode = "kb"
@@ -151,7 +156,7 @@ def answer(question: str, top_k: int | None = None, mode: str = "kb") -> dict:
         return {"answer": reply, "sources": []}
 
     # 知识库 / 混合：先检索
-    hits = hybrid_search(question, top_k=top_k)
+    hits = hybrid_search(question, top_k=top_k, folder=folder)
 
     if not hits:
         if mode == "hybrid":
@@ -161,10 +166,10 @@ def answer(question: str, top_k: int | None = None, mode: str = "kb") -> dict:
                 question,
                 temperature=0.7,
             )
-            note = "（⚠️ 知识库中暂无相关文件，以下为 AI 通用回答，请以学校最新规定为准）\n\n"
+            note = "（⚠️ 知识库中暂无相关资料，以下为 AI 通用回答，仅供参考）\n\n"
             return {"answer": note + reply, "sources": []}
         return {
-            "answer": "知识库还是空的，请先上传学生手册、教务通知等文件再提问。",
+            "answer": "知识库还是空的，请先在左侧上传文件再提问。",
             "sources": [],
         }
 
@@ -179,7 +184,12 @@ def answer(question: str, top_k: int | None = None, mode: str = "kb") -> dict:
     return {"answer": reply, "sources": _dedup_sources(hits)}
 
 
-def answer_stream(question: str, top_k: int | None = None, mode: str = "kb"):
+def answer_stream(
+    question: str,
+    top_k: int | None = None,
+    mode: str = "kb",
+    folder: str | None = None,
+):
     """流式版本：先 yield ("sources", [...])，再逐段 yield ("token", str)。"""
     if mode not in VALID_MODES:
         mode = "kb"
@@ -189,16 +199,16 @@ def answer_stream(question: str, top_k: int | None = None, mode: str = "kb"):
         yield from (("token", t) for t in _stream_llm(SYSTEM_PROMPT_GENERAL, question, 0.7))
         return
 
-    hits = hybrid_search(question, top_k=top_k)
+    hits = hybrid_search(question, top_k=top_k, folder=folder)
 
     if not hits:
         if mode == "hybrid":
             yield ("sources", [])
-            yield ("token", "（⚠️ 知识库中暂无相关文件，以下为 AI 通用回答，请以学校最新规定为准）\n\n")
+            yield ("token", "（⚠️ 知识库中暂无相关资料，以下为 AI 通用回答，仅供参考）\n\n")
             yield from (("token", t) for t in _stream_llm(SYSTEM_PROMPT_GENERAL, question, 0.7))
             return
         yield ("sources", [])
-        yield ("token", "知识库还是空的，请先上传学生手册、教务通知等文件再提问。")
+        yield ("token", "知识库还是空的，请先在左侧上传文件再提问。")
         return
 
     yield ("sources", _dedup_sources(hits))

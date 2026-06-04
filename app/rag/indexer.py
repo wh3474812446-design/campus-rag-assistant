@@ -26,7 +26,7 @@ def guess_doc_type(filename: str) -> str:
     return "其他文件"
 
 
-def ingest_file(path: str | Path) -> dict:
+def ingest_file(path: str | Path, folder: str = "默认") -> dict:
     """处理单个文件，返回入库结果。"""
     path = Path(path)
     source = path.name
@@ -34,11 +34,12 @@ def ingest_file(path: str | Path) -> dict:
 
     text = load_document(path)
     chunks = split_text(text)
-    written = add_chunks(source=source, doc_type=doc_type, chunks=chunks)
+    written = add_chunks(source=source, doc_type=doc_type, chunks=chunks, folder=folder)
 
     return {
         "source": source,
         "doc_type": doc_type,
+        "folder": folder,
         "chars": len(text),
         "chunks": written,
     }

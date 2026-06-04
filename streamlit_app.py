@@ -1,4 +1,4 @@
-"""Streamlit 前端：上传文档 + 聊天问答。
+"""Streamlit 前端：RAG 知识库（上传文档 + 文件夹管理 + 聊天问答）。
 
 启动：streamlit run streamlit_app.py
 （需要后端已启动：uvicorn app.main:app）
@@ -12,47 +12,78 @@ import requests
 import streamlit as st
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
+ALL_SCOPE = "🌐 全部知识库"
 
-st.set_page_config(page_title="校园知识库问答助手", page_icon="🎓", layout="wide")
+st.set_page_config(page_title="RAG 知识库", page_icon="📚", layout="wide")
 
 
 def api(path: str) -> str:
     return f"{BACKEND_URL}/api{path}"
 
 
+def fetch_folders() -> list:
+    try:
+        return requests.get(api("/folders"), timeout=10).json()["folders"]
+    except requests.RequestException:
+        return ["默认"]
+
+
 # 模式：显示名 -> 后端参数
 MODE_OPTIONS = {
-    "📚 知识库问答（只照文件答）": "kb",
+    "📚 知识库问答（只照资料答）": "kb",
     "🔀 知识库 + AI 补充": "hybrid",
     "💬 通用助手（什么都能聊）": "general",
 }
 
-# ---------- 侧边栏：模式 + 文档管理 ----------
+# ---------- 侧边栏：模式 + 文件夹 + 文档管理 ----------
 with st.sidebar:
     st.header("🧭 回答模式")
     mode_label = st.radio(
         "选择助手的回答方式",
         list(MODE_OPTIONS.keys()),
         index=0,
-        help="知识库模式只依据你上传的文件；通用助手可回答任何问题。",
+        help="知识库模式只依据你上传的资料；通用助手可回答任何问题。",
     )
     mode = MODE_OPTIONS[mode_label]
     st.caption(
         {
-            "kb": "只依据上传的文件回答，带原文出处，绝不编造。",
-            "hybrid": "优先用文件；文件没有的，用 AI 通用知识补充并标注。",
+            "kb": "只依据上传的资料回答，带原文出处，绝不编造。",
+            "hybrid": "优先用资料；资料没有的，用 AI 通用知识补充并标注。",
             "general": "完全放开的 DeepSeek，可写作、翻译、解释概念、写代码等。",
         }[mode]
     )
 
-    st.divider()
-    st.header("📚 知识库管理")
+    folders = fetch_folders()
 
+    # 提问范围：在哪个文件夹内检索
+    query_folder = None
+    if mode != "general":
+        scope = st.selectbox("🔭 提问范围", [ALL_SCOPE] + folders, index=0)
+        query_folder = None if scope == ALL_SCOPE else scope
+
+    st.divider()
+    st.header("📁 知识库管理")
+
+    # 新建文件夹
+    with st.expander("➕ 新建文件夹"):
+        new_folder = st.text_input("文件夹名称", placeholder="如：法律法规 / 产品手册")
+        if st.button("创建", use_container_width=True):
+            name = new_folder.strip()
+            if name:
+                r = requests.post(api("/folders"), json={"name": name}, timeout=10)
+                if r.ok:
+                    st.success(f"已创建「{name}」")
+                    st.rerun()
+                else:
+                    st.error(r.json().get("detail", "创建失败"))
+
+    # 上传到指定文件夹
+    target_folder = st.selectbox("📂 上传到文件夹", folders, index=0)
     uploaded = st.file_uploader(
-        "上传校园文件",
+        "上传文档",
         type=["pdf", "docx", "txt", "md"],
         accept_multiple_files=True,
-        help="学生手册 / 教务通知 / 奖学金评定办法 / 实习管理规定 / 毕业论文规范",
+        help="支持 PDF / Word / TXT / Markdown，任意领域的资料均可",
     )
     if uploaded and st.button("📥 构建知识库", use_container_width=True):
         for f in uploaded:
@@ -61,29 +92,51 @@ with st.sidebar:
                     resp = requests.post(
                         api("/upload"),
                         files={"file": (f.name, f.getvalue())},
+                        data={"folder": target_folder},
                         timeout=300,
                     )
                     if resp.ok:
                         d = resp.json()
-                        st.success(f"✅ {d['source']}（{d['doc_type']}）→ {d['chunks']} 块")
+                        st.success(f"✅ {d['source']} → 「{d['folder']}」{d['chunks']} 块")
                     else:
                         st.error(f"❌ {f.name}：{resp.json().get('detail', resp.text)}")
                 except requests.RequestException as e:
                     st.error(f"❌ 连接后端失败：{e}")
+        st.rerun()
 
     st.divider()
-    st.subheader("已入库文档")
+    st.subheader("📑 已入库文档")
     try:
         docs = requests.get(api("/documents"), timeout=10).json()
+        # 按文件夹聚合展示
+        by_folder: dict = {f: [] for f in folders}
+        for d in docs["documents"]:
+            by_folder.setdefault(d["folder"], []).append(d)
+
         if docs["total_documents"] == 0:
             st.caption("暂无文档，请先上传。")
         else:
             st.caption(f"共 {docs['total_documents']} 个文件 / {docs['total_chunks']} 个文本块")
-            for d in docs["documents"]:
+
+        for folder in by_folder:
+            items = by_folder[folder]
+            head_l, head_r = st.columns([4, 1])
+            head_l.markdown(f"**📁 {folder}** （{len(items)}）")
+            if folder != "默认":
+                if head_r.button("🗑", key=f"delfolder_{folder}", help="删除整个文件夹"):
+                    requests.delete(api(f"/folders/{folder}"), timeout=15)
+                    st.rerun()
+            if not items:
+                st.caption("　（空文件夹）")
+            for d in items:
                 c1, c2 = st.columns([4, 1])
-                c1.write(f"📄 {d['source']}  \n　`{d['doc_type']}` · {d['chunks']} 块")
-                if c2.button("🗑", key=f"del_{d['source']}"):
-                    requests.delete(api(f"/documents/{d['source']}"), timeout=10)
+                c1.write(f"　📄 {d['source']} · {d['chunks']} 块")
+                if c2.button("🗑", key=f"del_{folder}_{d['source']}"):
+                    requests.delete(
+                        api(f"/documents/{d['source']}"),
+                        params={"folder": folder},
+                        timeout=10,
+                    )
                     st.rerun()
     except requests.RequestException:
         st.warning("⚠️ 后端未连接。请先运行 `uvicorn app.main:app`。")
@@ -142,13 +195,14 @@ def render_api_settings() -> None:
 
 top_left, top_right = st.columns([0.72, 0.28])
 with top_left:
-    st.title("🎓 校园政策问答助手")
+    st.title("📚 RAG 知识库")
 with top_right:
     st.write("")  # 占位，让按钮和标题大致齐平
     with st.popover("⚙️ API 设置", use_container_width=True):
         render_api_settings()
 
-st.caption("基于你上传的学校文件，引用原文回答教务、实习、奖学金、转专业等问题。")
+_scope_tip = "全部知识库" if query_folder is None else f"「{query_folder}」"
+st.caption(f"上传任意文档自动建库，基于原文引用作答。当前提问范围：{_scope_tip}")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -220,7 +274,7 @@ if prompt := st.chat_input("例如：奖学金评定的成绩占比是多少？"
             try:
                 resp = requests.post(
                     api("/chat/stream"),
-                    json={"question": prompt, "mode": mode},
+                    json={"question": prompt, "mode": mode, "folder": query_folder},
                     stream=True,
                     timeout=300,
                 )

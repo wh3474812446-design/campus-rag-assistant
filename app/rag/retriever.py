@@ -14,10 +14,9 @@ from rank_bm25 import BM25Okapi
 from app.config import settings
 from app.rag import vectorstore
 
-# BM25 索引缓存（库内容变化时重建）
-_bm25: BM25Okapi | None = None
-_bm25_docs: list[dict] = []
-_bm25_count: int = -1
+# BM25 索引缓存（按文件夹分别缓存；库内容变化时重建）
+# key: 文件夹名或 "__all__"  ->  (BM25, docs, count)
+_bm25_cache: dict[str, tuple] = {}
 
 # RRF 常数，越大越"温和"，业界常用 60
 _RRF_K = 60
@@ -27,37 +26,40 @@ def _tokenize(text: str) -> list[str]:
     return [t for t in jieba.lcut(text) if t.strip()]
 
 
-def _ensure_bm25() -> None:
-    """库里块数变化时，重建 BM25 索引。"""
-    global _bm25, _bm25_docs, _bm25_count
-    count = vectorstore.count()
-    if _bm25 is not None and count == _bm25_count:
-        return
-    _bm25_docs = vectorstore.get_all()
-    _bm25_count = count
-    if _bm25_docs:
-        corpus = [_tokenize(d["text"]) for d in _bm25_docs]
-        _bm25 = BM25Okapi(corpus)
-    else:
-        _bm25 = None
+def _get_bm25(folder: str | None):
+    """取（某文件夹范围的）BM25 索引；块数变化时重建。"""
+    key = folder or "__all__"
+    docs = vectorstore.get_all(folder)
+    count = len(docs)
+    cached = _bm25_cache.get(key)
+    if cached and cached[2] == count:
+        return cached[0], cached[1]
+    bm25 = BM25Okapi([_tokenize(d["text"]) for d in docs]) if docs else None
+    _bm25_cache[key] = (bm25, docs, count)
+    return bm25, docs
 
 
-def _bm25_ranked(query: str, n: int) -> list[dict]:
-    _ensure_bm25()
-    if _bm25 is None:
+def _bm25_ranked(query: str, n: int, folder: str | None) -> list[dict]:
+    bm25, docs = _get_bm25(folder)
+    if bm25 is None:
         return []
-    scores = _bm25.get_scores(_tokenize(query))
+    scores = bm25.get_scores(_tokenize(query))
     order = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
-    return [_bm25_docs[i] for i in order[:n] if scores[i] > 0]
+    return [docs[i] for i in order[:n] if scores[i] > 0]
 
 
-def hybrid_search(query: str, top_k: int | None = None) -> list[dict]:
-    """返回融合后的 top_k 文本块，每个带 method 标注命中来源。"""
+def hybrid_search(
+    query: str, top_k: int | None = None, folder: str | None = None
+) -> list[dict]:
+    """返回融合后的 top_k 文本块，每个带 method 标注命中来源。
+
+    folder 不为空时，只在该文件夹（知识库分区）内检索。
+    """
     top_k = top_k or settings.top_k
     candidates = max(top_k * 3, settings.retrieval_candidates)
 
-    vec_hits = vectorstore.search(query, top_k=candidates)
-    bm_hits = _bm25_ranked(query, candidates)
+    vec_hits = vectorstore.search(query, top_k=candidates, folder=folder)
+    bm_hits = _bm25_ranked(query, candidates, folder)
 
     # RRF 融合：按各自排名累加 1/(K+rank)
     fused: dict[str, dict] = {}
