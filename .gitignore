@@ -26,6 +26,9 @@ data/folders.json
 # 日志
 *.log
 
+# 快捷方式（含本机绝对路径，由 install.bat 在本机生成，不入库）
+*.lnk
+
 # 编辑器 / 系统
 .vscode/
 .idea/

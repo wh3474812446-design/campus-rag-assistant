@@ -36,14 +36,15 @@ echo.
 echo   [OK] 依赖安装完成。
 echo.
 
-echo [3/3] 创建配置与桌面快捷方式...
+echo [3/3] 创建配置与启动快捷方式...
 if not exist ".env" copy ".env.example" ".env" >nul
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0create_shortcut.ps1"
 echo.
 
 echo ============================================================
 echo   安装完成！
-echo   桌面已生成「RAG 知识库」图标，以后双击它即可打开网站。
+echo   本文件夹内已生成「一键启动 RAG 知识库」快捷方式，
+echo   以后双击它即可：自动开启后端 + 前端，并打开网站。
 echo   打开网站后，在右上角「API 设置」里填入你的 DeepSeek API Key
 echo   （在 https://platform.deepseek.com 注册获取）即可开始使用。
 echo ============================================================

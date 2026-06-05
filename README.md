@@ -113,9 +113,9 @@ local-rag-qa/
 ├── streamlit_app.py         # 网页前端（聊天 / 上传 / 模式 / API 设置）
 ├── scripts/ingest.py        # 命令行批量入库
 ├── data/samples/            # 5 份学校政策示例文件，可直接测试
-├── install.bat              # Windows 一键安装（装依赖 + 建桌面快捷方式）
-├── create_shortcut.ps1      # 生成桌面快捷方式（被 install.bat 调用）
-├── start.bat                # 一键启动（前后端 + 自动开网页）
+├── install.bat              # Windows 一键安装（装依赖 + 在文件夹内建启动快捷方式）
+├── create_shortcut.ps1      # 在项目文件夹内生成启动快捷方式（被 install.bat 调用）
+├── start.bat                # 一键启动（先起后端→等就绪→再开前端 + 自动开网页）
 ├── .streamlit/config.toml   # streamlit 主题 / 配置
 ├── requirements.txt
 └── .env.example
@@ -170,8 +170,8 @@ local-rag-qa/
 
 1. 安装 [Python 3.10+](https://www.python.org/downloads/)（安装时勾选 **Add Python to PATH**）
 2. 下载本项目（绿色 `Code` 按钮 → Download ZIP，解压）
-3. **双击 `install.bat`** —— 自动装好依赖，并在**桌面生成「RAG 知识库」快捷方式**
-4. **双击桌面的「RAG 知识库」图标** —— 自动启动并打开网页（以后每次用都点它）
+3. **双击 `install.bat`** —— 自动装好依赖，并在**项目文件夹内生成「一键启动 RAG 知识库」快捷方式**
+4. **双击文件夹内的「一键启动 RAG 知识库」** —— 自动开启后端 + 前端并打开网页（以后每次用都点它）
 5. 在网页**右上角「⚙️ API 设置」**里填入你的 DeepSeek API Key → 保存 → 即可开始提问
 
 > DeepSeek API Key 在 https://platform.deepseek.com 注册后于「API Keys」新建。
