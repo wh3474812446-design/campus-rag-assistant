@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     chunk_overlap: int = 80
     top_k: int = 4
     retrieval_candidates: int = 10  # 混合检索时每路召回的候选数
+    use_title_route: bool = True  # 第三路召回：标题/文件名匹配
+
+    # 重排序（cross-encoder rerank）
+    use_rerank: bool = True
+    reranker_model_name: str = "BAAI/bge-reranker-base"
+    rerank_candidates: int = 20  # 进入重排的候选数（融合后取前 N 个再精排）
 
     # 存储
     chroma_dir: str = "data/chroma"

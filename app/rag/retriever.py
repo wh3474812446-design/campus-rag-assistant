@@ -48,6 +48,28 @@ def _bm25_ranked(query: str, n: int, folder: str | None) -> list[dict]:
     return [docs[i] for i in order[:n] if scores[i] > 0]
 
 
+def _title_ranked(query: str, n: int, folder: str | None) -> list[dict]:
+    """第三路召回：问题词命中文档名（source），就召回该文档的文本块。
+
+    向量/BM25 都看的是正文，对"问题正好是某份文件的主题"不够敏感；
+    标题路按文件名命中补一刀，让主题对口的文档更容易被选中。
+    """
+    _, docs = _get_bm25(folder)  # 复用缓存里的全量块
+    if not docs:
+        return []
+    q_tokens = [t for t in _tokenize(query) if len(t) >= 2]
+    if not q_tokens:
+        return []
+    scored = []
+    for d in docs:
+        src = d.get("source", "")
+        hit = sum(1 for t in q_tokens if t in src)
+        if hit > 0:
+            scored.append((hit, d))
+    scored.sort(key=lambda x: (-x[0], x[1].get("chunk_index", 0)))
+    return [d for _, d in scored[:n]]
+
+
 def hybrid_search(
     query: str, top_k: int | None = None, folder: str | None = None
 ) -> list[dict]:
@@ -60,6 +82,7 @@ def hybrid_search(
 
     vec_hits = vectorstore.search(query, top_k=candidates, folder=folder)
     bm_hits = _bm25_ranked(query, candidates, folder)
+    title_hits = _title_ranked(query, candidates, folder) if settings.use_title_route else []
 
     # RRF 融合：按各自排名累加 1/(K+rank)
     fused: dict[str, dict] = {}
@@ -77,19 +100,29 @@ def hybrid_search(
 
     _add(vec_hits, "vector")
     _add(bm_hits, "keyword")
+    _add(title_hits, "title")
 
-    ranked = sorted(fused.values(), key=lambda x: x["rrf"], reverse=True)[:top_k]
+    ranked = sorted(fused.values(), key=lambda x: x["rrf"], reverse=True)
 
-    results = []
-    for item in ranked:
+    # 融合后先取一批候选（开启重排时多取一些供精排）
+    pool_size = settings.rerank_candidates if settings.use_rerank else top_k
+    _LABEL = {"vector": "向量", "keyword": "关键词", "title": "标题"}
+    pool = []
+    for item in ranked[:pool_size]:
         hit = dict(item["hit"])
         methods = item["methods"]
-        if methods == {"vector", "keyword"}:
-            hit["method"] = "向量+关键词"
-        elif methods == {"keyword"}:
-            hit["method"] = "关键词"
-        else:
-            hit["method"] = "向量"
+        hit["method"] = "+".join(
+            _LABEL[m] for m in ("vector", "keyword", "title") if m in methods
+        ) or "向量"
         hit.setdefault("score", 0.0)
-        results.append(hit)
-    return results
+        pool.append(hit)
+
+    # 交叉编码器重排（失败则回退融合顺序，保证可用）
+    if settings.use_rerank and pool:
+        try:
+            from app.rag.reranker import rerank
+
+            return rerank(query, pool, top_k)
+        except Exception:  # noqa: BLE001
+            return pool[:top_k]
+    return pool[:top_k]
