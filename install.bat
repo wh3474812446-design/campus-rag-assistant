@@ -1,10 +1,10 @@
 @echo off
 chcp 65001 >nul
 cd /d "%~dp0"
-title 校园知识库问答助手 - 一键安装
+title RAG 知识库 - 一键安装
 
 echo ============================================================
-echo            校园知识库问答助手   一键安装向导
+echo               RAG 知识库   一键安装向导
 echo ============================================================
 echo.
 
@@ -36,24 +36,16 @@ echo.
 echo   [OK] 依赖安装完成。
 echo.
 
-echo [3/3] 配置 DeepSeek API Key...
+echo [3/3] 创建配置与桌面快捷方式...
 if not exist ".env" copy ".env.example" ".env" >nul
-echo.
-echo   请先到  https://platform.deepseek.com  注册，并在「API Keys」里新建一个 key。
-echo   （key 形如 sk-xxxxxxxxxxxxxxxx）
-echo.
-set /p APIKEY="   把你的 key 粘贴到这里后按回车（直接回车=稍后手动填）: "
-if not "%APIKEY%"=="" (
-    powershell -NoProfile -Command "$c=[IO.File]::ReadAllText('.env'); $c=[Regex]::Replace($c,'(?m)^DEEPSEEK_API_KEY=.*$','DEEPSEEK_API_KEY=%APIKEY%'); [IO.File]::WriteAllText('.env',$c,(New-Object Text.UTF8Encoding $false))"
-    echo   [OK] 已写入 .env。
-) else (
-    echo   [!] 已跳过。没关系，启动后也可以直接在网页右上角的
-    echo       「⚙️ API 设置」里填写 key，无需改任何文件。
-)
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0create_shortcut.ps1"
 echo.
 
 echo ============================================================
-echo   安装完成！以后每次使用，只需双击  start.bat  即可。
+echo   安装完成！
+echo   桌面已生成「RAG 知识库」图标，以后双击它即可打开网站。
+echo   打开网站后，在右上角「API 设置」里填入你的 DeepSeek API Key
+echo   （在 https://platform.deepseek.com 注册获取）即可开始使用。
 echo ============================================================
 echo.
 set /p RUNNOW="   现在就启动试试吗？(Y / N): "

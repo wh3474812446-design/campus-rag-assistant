@@ -86,7 +86,7 @@
 ### 目录结构
 
 ```
-campus-rag-assistant/
+local-rag-qa/
 ├── app/
 │   ├── config.py            # 配置（读/写 .env）
 │   ├── main.py              # FastAPI 入口
@@ -104,10 +104,11 @@ campus-rag-assistant/
 │       └── chain.py         # 三种模式问答（调 DeepSeek）
 ├── streamlit_app.py         # 网页前端（聊天 / 上传 / 模式 / API 设置）
 ├── scripts/ingest.py        # 命令行批量入库
-├── data/samples/            # 5 份示例文件，可直接测试
-├── install.bat              # Windows 一键安装
-├── start.bat                # Windows 一键启动（前后端 + 自动开网页）
-├── .streamlit/config.toml   # streamlit 配置
+├── data/samples/            # 5 份学校政策示例文件，可直接测试
+├── install.bat              # Windows 一键安装（装依赖 + 建桌面快捷方式）
+├── create_shortcut.ps1      # 生成桌面快捷方式（被 install.bat 调用）
+├── start.bat                # 一键启动（前后端 + 自动开网页）
+├── .streamlit/config.toml   # streamlit 主题 / 配置
 ├── requirements.txt
 └── .env.example
 ```
@@ -120,20 +121,21 @@ campus-rag-assistant/
 
 1. 安装 [Python 3.10+](https://www.python.org/downloads/)（安装时勾选 **Add Python to PATH**）
 2. 下载本项目（绿色 `Code` 按钮 → Download ZIP，解压）
-3. **双击 `install.bat`** —— 它会自动装好依赖（也可在此直接粘贴 API Key）
-4. 安装完成后，以后每次使用 **双击 `start.bat`** 即可（浏览器会自动打开）
+3. **双击 `install.bat`** —— 自动装好依赖，并在**桌面生成「RAG 知识库」快捷方式**
+4. **双击桌面的「RAG 知识库」图标** —— 自动启动并打开网页（以后每次用都点它）
 5. 在网页**右上角「⚙️ API 设置」**里填入你的 DeepSeek API Key → 保存 → 即可开始提问
 
 > DeepSeek API Key 在 https://platform.deepseek.com 注册后于「API Keys」新建。
-> Key 既可以在安装时填、也可以随时在网页右上角设置/更换，无需手动改文件。
+> Key 在网页里随时可设置/更换，无需改任何文件。
+> 内置 5 份**学校政策示例文件**（在 `data/samples/`，已预置到「默认」文件夹），可立即试问。
 
 下面是手动方式（适合开发者 / macOS / Linux）。
 
 ### 1. 准备环境
 
 ```bash
-git clone <你的仓库地址>
-cd campus-rag-assistant
+git clone https://github.com/<你的用户名>/local-rag-qa.git
+cd local-rag-qa
 
 python -m venv .venv
 # Windows
