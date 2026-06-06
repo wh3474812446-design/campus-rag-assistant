@@ -4,15 +4,69 @@
 （需要后端已启动：uvicorn app.main:app）
 """
 
+import atexit
 import html
 import json
 import os
+import subprocess
+import sys
+import time
 
 import requests
 import streamlit as st
 
+# 强制让本机回环绕过代理（开了 Clash/v2ray 时也能连上后端）
+os.environ["NO_PROXY"] = "127.0.0.1,localhost," + os.environ.get("NO_PROXY", "")
+os.environ["no_proxy"] = os.environ["NO_PROXY"]
+
 BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
 ALL_SCOPE = "🌐 全部知识库"
+_ROOT = os.path.dirname(os.path.abspath(__file__))
+
+
+def _backend_alive() -> bool:
+    """后端健康检查（显式禁用代理，避免回环被代理拦截）。"""
+    try:
+        r = requests.get(
+            f"{BACKEND_URL}/api/health",
+            timeout=2,
+            proxies={"http": None, "https": None},
+        )
+        return r.status_code == 200
+    except requests.RequestException:
+        return False
+
+
+@st.cache_resource(show_spinner="正在启动后端服务（首次需加载向量模型，约 10–30 秒）…")
+def ensure_backend():
+    """前端自己托管后端：连不上就把 uvicorn 当子进程拉起来并守护。
+
+    这样只需一个窗口，后端不会被误关；连不上时自动重启。
+    cache_resource 保证整个会话只启动一次。
+    """
+    if _backend_alive():
+        return None
+
+    log = open(os.path.join(_ROOT, "backend.log"), "a", encoding="utf-8")
+    creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "uvicorn", "app.main:app",
+         "--host", "127.0.0.1", "--port", "8000"],
+        cwd=_ROOT,
+        stdout=log,
+        stderr=subprocess.STDOUT,
+        creationflags=creationflags,
+    )
+    atexit.register(lambda: proc.terminate())
+
+    # 最多等 60 秒就绪
+    for _ in range(60):
+        if _backend_alive():
+            return proc
+        if proc.poll() is not None:  # 子进程已退出，启动失败
+            break
+        time.sleep(1)
+    return proc
 
 st.set_page_config(page_title="RAG 知识库", page_icon="📚", layout="wide")
 
@@ -94,6 +148,15 @@ a, a:visited{ color:var(--accent); }
 </style>
 """
 st.markdown(_CSS, unsafe_allow_html=True)
+
+# 确保后端在线（连不上则自动拉起并等待就绪）
+ensure_backend()
+if not _backend_alive():
+    st.error(
+        "后端服务启动失败。请关闭本窗口后重新双击「一键启动 RAG 知识库」重试；"
+        "若仍失败，请打开项目目录下的 backend.log 查看报错。"
+    )
+    st.stop()
 
 
 def api(path: str) -> str:
